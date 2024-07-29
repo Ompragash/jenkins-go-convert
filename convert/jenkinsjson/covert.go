@@ -374,9 +374,7 @@ func collectStepsWithID(currentNode jenkinsjson.Node, stepWithIDList *[]StepWith
 			}
 		}
 	case "sh":
-		step := jenkinsjson.ConvertSh(currentNode, variables, dockerImage)
-		step.Spec.(*harness.StepExec).Image = dockerImage
-		*stepWithIDList = append(*stepWithIDList, StepWithID{Step: step, ID: id})
+		*stepWithIDList = append(*stepWithIDList, StepWithID{Step: jenkinsjson.ConvertSh(currentNode, variables, dockerImage), ID: id})
 	case "checkout":
 		*stepWithIDList = append(*stepWithIDList, StepWithID{Step: jenkinsjson.ConvertCheckout(currentNode, variables), ID: id})
 	case "archiveArtifacts":
