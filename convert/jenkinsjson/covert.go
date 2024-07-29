@@ -263,8 +263,13 @@ func extractToolType(fullToolType string) string {
 func recursiveParseJsonToSteps(currentNode jenkinsjson.Node, steps *[]*harness.Step, processedTools *ProcessedTools, variables map[string]string) (*harness.CloneStage, *harness.Repository) {
 	stepWithIDList := make([]StepWithID, 0)
 
+	var dockerImage string = "alpine"
+	if currentNode.AttributesMap["jenkins.pipeline.step.type"] == "withDockerContainer" {
+        dockerImage = currentNode.ParameterMap["image"].(string)
+    }
+
 	// Collect all steps with their IDs
-	collectStepsWithID(currentNode, &stepWithIDList, processedTools, variables)
+	collectStepsWithID(currentNode, &stepWithIDList, processedTools, variables, dockerImage)
 
 	// Sort the steps based on their IDs
 	sort.Slice(stepWithIDList, func(i, j int) bool {
@@ -281,13 +286,13 @@ func recursiveParseJsonToSteps(currentNode jenkinsjson.Node, steps *[]*harness.S
 	return nil, nil
 }
 
-func collectStepsWithID(currentNode jenkinsjson.Node, stepWithIDList *[]StepWithID, processedTools *ProcessedTools, variables map[string]string) (*harness.CloneStage, *harness.Repository) {
+func collectStepsWithID(currentNode jenkinsjson.Node, stepWithIDList *[]StepWithID, processedTools *ProcessedTools, variables map[string]string, dockerImage string) (*harness.CloneStage, *harness.Repository) {
 	var clone *harness.CloneStage
 	var repo *harness.Repository
 
 	if len(currentNode.AttributesMap) == 0 {
 		for _, child := range currentNode.Children {
-			clone, repo = collectStepsWithID(child, stepWithIDList, processedTools, variables)
+			clone, repo = collectStepsWithID(child, stepWithIDList, processedTools, variables, dockerImage)
 		}
 	}
 
@@ -309,14 +314,14 @@ func collectStepsWithID(currentNode jenkinsjson.Node, stepWithIDList *[]StepWith
 		// node, parallel, withEnv, and withMaven are wrapper layers to hold actual steps
 		// parallel should be handled at its parent
 		for _, child := range currentNode.Children {
-			clone, repo = collectStepsWithID(child, stepWithIDList, processedTools, variables)
+			clone, repo = collectStepsWithID(child, stepWithIDList, processedTools, variables, dockerImage)
 		}
 	case "withEnv":
 		var1 := ExtractEnvironmentVariables(currentNode)
 		combinedVariables := mergeMaps(variables, var1)
 
 		for _, child := range currentNode.Children {
-			clone, repo = collectStepsWithID(child, stepWithIDList, processedTools, combinedVariables)
+			clone, repo = collectStepsWithID(child, stepWithIDList, processedTools, combinedVariables, dockerImage)
 		}
 
 	case "stage":
@@ -326,7 +331,7 @@ func collectStepsWithID(currentNode jenkinsjson.Node, stepWithIDList *[]StepWith
 			if currentNode.Children[0].AttributesMap["jenkins.pipeline.step.type"] == "parallel" {
 				parallelStepItems := make([]*harness.Step, 0)
 				for _, child := range currentNode.Children {
-					clone, repo = collectStepsWithID(child, stepWithIDList, processedTools, variables)
+					clone, repo = collectStepsWithID(child, stepWithIDList, processedTools, variables, dockerImage)
 				}
 				parallelStep := &harness.Step{
 					Name: currentNode.SpanName,
@@ -339,16 +344,18 @@ func collectStepsWithID(currentNode jenkinsjson.Node, stepWithIDList *[]StepWith
 				*stepWithIDList = append(*stepWithIDList, StepWithID{Step: parallelStep, ID: id})
 			} else {
 				for _, child := range currentNode.Children {
-					clone, repo = collectStepsWithID(child, stepWithIDList, processedTools, variables)
+					clone, repo = collectStepsWithID(child, stepWithIDList, processedTools, variables, dockerImage)
 				}
 			}
 		} else {
 			for _, child := range currentNode.Children {
-				clone, repo = collectStepsWithID(child, stepWithIDList, processedTools, variables)
+				clone, repo = collectStepsWithID(child, stepWithIDList, processedTools, variables, dockerImage)
 			}
 		}
 	case "sh":
-		*stepWithIDList = append(*stepWithIDList, StepWithID{Step: jenkinsjson.ConvertSh(currentNode, variables), ID: id})
+		step := jenkinsjson.ConvertSh(currentNode, variables, dockerImage)
+		step.Spec.(*harness.StepExec).Image = dockerImage
+		*stepWithIDList = append(*stepWithIDList, StepWithID{Step: step, ID: id})
 	case "checkout":
 		*stepWithIDList = append(*stepWithIDList, StepWithID{Step: jenkinsjson.ConvertCheckout(currentNode, variables), ID: id})
 	case "archiveArtifacts":
