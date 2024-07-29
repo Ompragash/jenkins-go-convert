@@ -263,10 +263,31 @@ func extractToolType(fullToolType string) string {
 func recursiveParseJsonToSteps(currentNode jenkinsjson.Node, steps *[]*harness.Step, processedTools *ProcessedTools, variables map[string]string) (*harness.CloneStage, *harness.Repository) {
 	stepWithIDList := make([]StepWithID, 0)
 
+	// Image attribute in directly available in step "withDockerContainer" Type as below in Jenkins Pipeline JSON
+	// so IMO, it's the most consistent source. Though need to check as I just went through the json in the spec doc.
+	// "name": "docker declarative #4",
+	// "attributesMap": {
+	//   "harness-others": "",
+	//   "jenkins.pipeline.step.type": "withDockerContainer",
+	//   "harness-attribute": "{\n  \"args\" : \"\",\n  \"image\" : \"node:20.16.0-alpine3.20\",\n  \"toolName\" : null\n}"
+	// },
+	// "type": "Run Phase Span",
+	// "parentSpanId": "c582a6a21b562b7f",
+	// "parameterMap": {
+	//   "args": "",
+	//   "image": "node:20.16.0-alpine3.20",
+	//   "toolName": null
+	// }
+	
+	// Default always points to `alpine` and when a docker-pipeline is invoked then we'll override the image value 
 	var dockerImage string = "alpine"
-	if currentNode.AttributesMap["jenkins.pipeline.step.type"] == "withDockerContainer" {
-        dockerImage = currentNode.ParameterMap["image"].(string)
-    }
+	if stepType, ok := currentNode.AttributesMap["jenkins.pipeline.step.type"]; ok && stepType == "withDockerContainer" {
+		if image, ok := currentNode.ParameterMap["image"].(string); ok {
+			dockerImage = image
+		} else {
+			fmt.Println("Expected 'image' key not found or is not a string")
+		}
+	}
 
 	// Collect all steps with their IDs
 	collectStepsWithID(currentNode, &stepWithIDList, processedTools, variables, dockerImage)
