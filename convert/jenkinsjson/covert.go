@@ -413,7 +413,7 @@ func collectStepsWithID(currentNode jenkinsjson.Node, stepWithIDList *[]StepWith
 			}
 		}
 		for _, child := range currentNode.Children {
-			clone, repo = collectStepsWithID(child, stepWithIDList, processedTools, variables, timeout)
+			clone, repo = collectStepsWithID(child, stepWithIDList, processedTools, variables, timeout, dockerImage)
 		}
 	case "checkout":
 		*stepWithIDList = append(*stepWithIDList, StepWithID{Step: jenkinsjson.ConvertCheckout(currentNode, variables), ID: id})
