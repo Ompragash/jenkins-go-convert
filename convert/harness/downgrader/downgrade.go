@@ -902,7 +902,7 @@ func convertStepWhen(when *v1.When, stepId string) *v0.StepWhen {
 
 func convertOutput(output string) *v0.Output {
 	return &v0.Output{
-		Name:  output,
+		Name: output,
 	}
 }
 
